@@ -24,5 +24,6 @@ data class DeviceEntity(
     val currentDownloadSpeedBps: Long = 0L,
     val currentUploadSpeedBps: Long = 0L,
     val firstSeenTimestamp: Long = System.currentTimeMillis(),
-    val lastSeenTimestamp: Long = System.currentTimeMillis()
+    val lastSeenTimestamp: Long = System.currentTimeMillis(),
+    val mirroredFromMac: String? = null
 )

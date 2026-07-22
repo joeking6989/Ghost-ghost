@@ -94,14 +94,18 @@ class HotspotRepository(private val context: Context) {
                 delay(2000) // update stats every 2 seconds
                 val currentDevices = dao.getAllDevices().first()
                 if (currentDevices.isNotEmpty()) {
-                    val updatedList = mutableListOf<DeviceEntity>()
                     val newLogsList = mutableListOf<TrafficLogEntity>()
                     var totalRxSum = 0L
                     var totalTxSum = 0L
 
-                    currentDevices.forEach { device ->
+                    val nonMirrored = currentDevices.filter { it.mirroredFromMac == null }
+                    val mirrored = currentDevices.filter { it.mirroredFromMac != null }
+
+                    val processedMap = mutableMapOf<String, DeviceEntity>()
+
+                    // First, process non-mirrored devices normally
+                    nonMirrored.forEach { device ->
                         if (device.isOnline && !device.isBlocked) {
-                            // Fluctuate speed according to device priority and type
                             val baseRxSpeed = when (device.deviceType) {
                                 DeviceType.SMART_TV -> Random.nextLong(2_000_000, 6_000_000)
                                 DeviceType.GAMING_CONSOLE -> Random.nextLong(3_000_000, 9_000_000)
@@ -112,12 +116,11 @@ class HotspotRepository(private val context: Context) {
                             }
 
                             val baseTxSpeed = when (device.deviceType) {
-                                DeviceType.IP_CAMERA -> Random.nextLong(500_000, 1_500_000) // camera uploads stream
+                                DeviceType.IP_CAMERA -> Random.nextLong(500_000, 1_500_000)
                                 DeviceType.LAPTOP -> Random.nextLong(200_000, 800_000)
                                 else -> Random.nextLong(5_000, 80_000)
                             }
 
-                            // Apply speed limit if set
                             val finalRx = if (device.speedLimitLimitKbps > 0) {
                                 val capBps = device.speedLimitLimitKbps * 125L
                                 baseRxSpeed.coerceAtMost(capBps)
@@ -136,9 +139,8 @@ class HotspotRepository(private val context: Context) {
                                 currentUploadSpeedBps = baseTxSpeed,
                                 lastSeenTimestamp = System.currentTimeMillis()
                             )
-                            updatedList.add(updatedDevice)
+                            processedMap[device.macAddress] = updatedDevice
 
-                            // Save traffic snapshot log
                             newLogsList.add(
                                 TrafficLogEntity(
                                     deviceMac = device.macAddress,
@@ -148,15 +150,56 @@ class HotspotRepository(private val context: Context) {
                                 )
                             )
                         } else {
-                            updatedList.add(
-                                device.copy(
-                                    currentDownloadSpeedBps = 0L,
-                                    currentUploadSpeedBps = 0L
-                                )
+                            processedMap[device.macAddress] = device.copy(
+                                currentDownloadSpeedBps = 0L,
+                                currentUploadSpeedBps = 0L
                             )
                         }
                     }
 
+                    // Process mirrored devices using their active source device
+                    mirrored.forEach { device ->
+                        val sourceDev = processedMap[device.mirroredFromMac] ?: currentDevices.find { it.macAddress == device.mirroredFromMac }
+                        if (sourceDev != null) {
+                            val updatedDevice = device.copy(
+                                roomName = sourceDev.roomName,
+                                deviceType = sourceDev.deviceType,
+                                priority = sourceDev.priority,
+                                speedLimitLimitKbps = sourceDev.speedLimitLimitKbps,
+                                isBlocked = sourceDev.isBlocked,
+                                isOnline = sourceDev.isOnline,
+                                totalDownloadBytes = sourceDev.totalDownloadBytes,
+                                totalUploadBytes = sourceDev.totalUploadBytes,
+                                currentDownloadSpeedBps = sourceDev.currentDownloadSpeedBps,
+                                currentUploadSpeedBps = sourceDev.currentUploadSpeedBps,
+                                lastSeenTimestamp = System.currentTimeMillis()
+                            )
+                            processedMap[device.macAddress] = updatedDevice
+
+                            if (updatedDevice.isOnline && !updatedDevice.isBlocked) {
+                                val addedRx = (updatedDevice.currentDownloadSpeedBps * 2)
+                                val addedTx = (updatedDevice.currentUploadSpeedBps * 2)
+                                totalRxSum += updatedDevice.currentDownloadSpeedBps
+                                totalTxSum += updatedDevice.currentUploadSpeedBps
+
+                                newLogsList.add(
+                                    TrafficLogEntity(
+                                        deviceMac = device.macAddress,
+                                        rxBytes = addedRx,
+                                        txBytes = addedTx,
+                                        durationSeconds = 2
+                                    )
+                                )
+                            }
+                        } else {
+                            processedMap[device.macAddress] = device.copy(
+                                currentDownloadSpeedBps = 0L,
+                                currentUploadSpeedBps = 0L
+                            )
+                        }
+                    }
+
+                    val updatedList = processedMap.values.toList()
                     _currentRxSpeed.value = totalRxSum
                     _currentTxSpeed.value = totalTxSum
                     if (newLogsList.isNotEmpty()) {
@@ -165,6 +208,28 @@ class HotspotRepository(private val context: Context) {
                     dao.insertDevices(updatedList)
                 }
             }
+        }
+    }
+
+    private suspend fun syncMirroredDevices(sourceDev: DeviceEntity) {
+        val all = dao.getAllDevices().first()
+        val targetsToUpdate = all.filter { it.mirroredFromMac == sourceDev.macAddress }
+        if (targetsToUpdate.isNotEmpty()) {
+            val updatedTargets = targetsToUpdate.map { target ->
+                target.copy(
+                    roomName = sourceDev.roomName,
+                    deviceType = sourceDev.deviceType,
+                    priority = sourceDev.priority,
+                    speedLimitLimitKbps = sourceDev.speedLimitLimitKbps,
+                    isBlocked = sourceDev.isBlocked,
+                    isOnline = sourceDev.isOnline,
+                    currentDownloadSpeedBps = sourceDev.currentDownloadSpeedBps,
+                    currentUploadSpeedBps = sourceDev.currentUploadSpeedBps,
+                    totalDownloadBytes = sourceDev.totalDownloadBytes,
+                    totalUploadBytes = sourceDev.totalUploadBytes
+                )
+            }
+            dao.insertDevices(updatedTargets)
         }
     }
 
@@ -199,6 +264,7 @@ class HotspotRepository(private val context: Context) {
 
     suspend fun updateDevice(device: DeviceEntity) {
         dao.insertOrUpdateDevice(device)
+        syncMirroredDevices(device)
     }
 
     suspend fun toggleBlockDevice(mac: String, blocked: Boolean) {
@@ -213,6 +279,9 @@ class HotspotRepository(private val context: Context) {
                 deviceMac = mac
             )
         )
+        if (dev != null) {
+            syncMirroredDevices(dev.copy(isBlocked = blocked))
+        }
     }
 
     suspend fun deleteDevice(mac: String) {
@@ -228,14 +297,15 @@ class HotspotRepository(private val context: Context) {
             deviceType = sourceDev.deviceType,
             priority = sourceDev.priority,
             speedLimitLimitKbps = sourceDev.speedLimitLimitKbps,
-            isBlocked = sourceDev.isBlocked
+            isBlocked = sourceDev.isBlocked,
+            mirroredFromMac = sourceMac
         )
         dao.insertOrUpdateDevice(mirroredDevice)
 
         dao.insertAlert(
             NetworkAlertEntity(
-                title = "Device Mirroring Applied",
-                message = "Settings from ${sourceDev.customName} mirrored to ${targetDev.customName}.",
+                title = "Device Mirroring Linked",
+                message = "Settings and activity from ${sourceDev.customName} are now mirrored to ${targetDev.customName} in real time.",
                 alertType = "CONFIGURATION",
                 deviceMac = targetMac
             )

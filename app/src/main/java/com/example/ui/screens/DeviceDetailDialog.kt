@@ -24,11 +24,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -36,9 +38,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -300,6 +305,111 @@ fun DeviceDetailDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // --- REAL-TIME PROFILE MIRRORING SECTION ---
+                Text(
+                    text = "Real-time Profile Mirroring",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Continuously mirror settings & activity from another device in real-time.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                var mirrorEnabled by remember(device) { mutableStateOf(device.mirroredFromMac != null) }
+                var selectedSourceMac by remember(device) { mutableStateOf(device.mirroredFromMac ?: "") }
+                var mirrorDropdownExpanded by remember { mutableStateOf(false) }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Enable Real-time Mirroring Link", style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = mirrorEnabled,
+                        onCheckedChange = {
+                            mirrorEnabled = it
+                            if (!it) selectedSourceMac = ""
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = CyanPrimary),
+                        modifier = Modifier.testTag("mirror_link_switch")
+                    )
+                }
+
+                if (mirrorEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val availableSources = allDevices.filter { it.macAddress != device.macAddress }
+                    val currentSourceDev = availableSources.find { it.macAddress == selectedSourceMac }
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedCard(
+                            shape = RoundedCornerShape(12.dp),
+                            onClick = { mirrorDropdownExpanded = true },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("select_mirror_source_picker")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = currentSourceDev?.customName ?: "Select Source Device to Mirror",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    if (currentSourceDev != null) {
+                                        Text(
+                                            text = "${currentSourceDev.deviceType.displayName} • Priority: ${currentSourceDev.priority.name}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = mirrorDropdownExpanded,
+                            onDismissRequest = { mirrorDropdownExpanded = false }
+                        ) {
+                            availableSources.forEach { dev ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(dev.customName, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                "${dev.deviceType.displayName} • ${dev.roomName}",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedSourceMac = dev.macAddress
+                                        mirrorDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Real-time 24h consumption chart for individual device
                 Device24hDataChart(device = device)
 
@@ -336,6 +446,8 @@ fun DeviceDetailDialog(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Export CSV, Mirror Profile & Reset Usage Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -353,7 +465,7 @@ fun DeviceDetailDialog(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Export CSV", fontSize = 12.sp)
+                        Text(text = "Export Doc", fontSize = 12.sp)
                     }
 
                     if (onMirrorSettings != null && allDevices.size > 1) {
@@ -426,7 +538,8 @@ fun DeviceDetailDialog(
                                 roomName = roomName,
                                 deviceType = selectedCategory,
                                 priority = selectedPriority,
-                                speedLimitLimitKbps = speedLimitKbps.toLong()
+                                speedLimitLimitKbps = speedLimitKbps.toLong(),
+                                mirroredFromMac = if (mirrorEnabled && selectedSourceMac.isNotEmpty()) selectedSourceMac else null
                             )
                             onSaveDevice(updated)
                             onDismiss()
