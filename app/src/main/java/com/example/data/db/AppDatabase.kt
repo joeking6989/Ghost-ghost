@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         NetworkAlertEntity::class,
         TrafficLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
