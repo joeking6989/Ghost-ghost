@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Center Hotspot Node -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M54,64m-6,0a6,6 0 1,0 12,0a6,6 0 1,0 -12,0" />
+    <!-- Hotspot Inner Arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M43,53 A16,16 0 0,1 65,53" />
+    <!-- Hotspot Middle Arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00B0FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M35,44 A26,26 0 0,1 73,44" />
+    <!-- Hotspot Outer Arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2979FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:pathData="M27,35 A36,36 0 0,1 81,35" />
+    <!-- Down/Up Data Arrows -->
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M40,78 L46,72 L42,72 L42,67 L38,67 L38,72 L34,72 Z" />
+    <path
+        android:fillColor="#FF5252"
+        android:pathData="M68,67 L62,73 L66,73 L66,78 L70,78 L70,73 L74,73 Z" />
+</vector>

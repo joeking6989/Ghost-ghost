@@ -1,0 +1,6 @@
+{
+  "name": "Hotspot Monitor",
+  "description": "Real-time hotspot traffic monitoring and device data usage analytics for your household.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
